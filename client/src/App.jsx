@@ -5,21 +5,14 @@ import { v4 as uuidv4 } from "uuid";
 const API = import.meta.env.VITE_API_URL;
 
 function App() {
-  // 1. Lazy Initialization: Load from local storage directly when state is created
-  const [todos, setTodos] = useState(() => {
-    const savedTodos = localStorage.getItem("todos");
-    if (savedTodos) {
-      return JSON.parse(savedTodos);
-    } else {
-      return [];
-    }
-  });
-
+  // 1. Cleaned up state: Start with an empty array. MongoDB will fill it.
+  const [todos, setTodos] = useState([]);
   const [todo, setTodo] = useState("");
   const [editId, setEditId] = useState(null);
+
   useEffect(() => {
-    // Fetch data from your backend
-    fetch(`${API}/users`)
+    // 2. Fetch data from your backend (Fixed from /users to /todos)
+    fetch(`${API}/todos`)
       .then((res) => res.json())
       .then((data) => {
         // Map the MongoDB '_id' to your 'id' state so the rest of your app works
@@ -29,7 +22,8 @@ function App() {
           isCompleted: item.isCompleted,
         }));
         setTodos(formattedData);
-      });
+      })
+      .catch((err) => console.error("Failed to fetch tasks:", err));
   }, []);
 
   const handleAdd = async () => {
@@ -57,7 +51,7 @@ function App() {
       setTodo("");
       
     } else {
-      // --- ADD NEW TASK (Your existing code) ---
+      // --- ADD NEW TASK ---
       
       const response = await fetch(`${API}/todos`, {
         method: "POST",
@@ -75,7 +69,7 @@ function App() {
     }
   };
 
- const handleEdit = (id) => {
+  const handleEdit = (id) => {
     const itemToEdit = todos.find((item) => item.id === id);
     setTodo(itemToEdit.todo); // Put the text in the input box
     setEditId(id); // Remember which task we are currently editing
@@ -115,6 +109,7 @@ function App() {
       ),
     );
   };
+
   return (
     <>
       <Navbar />
