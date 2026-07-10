@@ -144,12 +144,20 @@ function App() {
     return <Auth setToken={setToken} setUsername={setUsername} />;
   }
 
-  // --- NEW: The Filter (Only show tasks that match the current toggle view) ---
-  const displayTodos = todos.filter((item) => item.listType === view);
+  // --- NEW: The Filter (Privacy Upgrade) ---
+  const displayTodos = todos.filter((item) => {
+    if (view === "personal") {
+      // 1. If we are in Personal view, the task MUST be personal AND belong to the logged-in user
+      return item.listType === "personal" && item.creatorName === username;
+    } else {
+      // 2. If we are in Group view, show all group tasks
+      return item.listType === "group";
+    }
+  });
 
   return (
     <>
-      <Navbar />
+      {/* <Navbar /> */}
       
       <div className="heading bg-blue-200 flex p-2 text-gray-600 justify-between items-center px-4 md:px-10">
         <h1 className="text-xl md:text-2xl font-bold">To Do list</h1>
@@ -165,19 +173,33 @@ function App() {
       </div>
 
       {/* --- NEW: The Toggle Buttons --- */}
-      <div className="flex justify-center gap-4 my-6">
-        <button 
-          onClick={() => setView("personal")}
-          className={`px-6 py-2 rounded-lg font-bold transition ${view === "personal" ? "bg-violet-600 text-white shadow-md" : "bg-gray-200 text-gray-600 hover:bg-gray-300"}`}
-        >
-          Personal
-        </button>
-        <button 
-          onClick={() => setView("group")}
-          className={`px-6 py-2 rounded-lg font-bold transition ${view === "group" ? "bg-violet-600 text-white shadow-md" : "bg-gray-200 text-gray-600 hover:bg-gray-300"}`}
-        >
-          Group Wishlist
-        </button>
+      <div className="flex justify-center my-6 px-4">
+        {/* The gray background pill */}
+        <div className="bg-gray-200 p-1 rounded-xl flex shadow-inner w-full max-w-sm">
+          
+          <button 
+            onClick={() => setView("personal")}
+            className={`flex-1 py-2 rounded-lg font-bold text-sm md:text-base transition-all duration-300 ${
+              view === "personal" 
+                ? "bg-white text-violet-700 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Personal
+          </button>
+
+          <button 
+            onClick={() => setView("group")}
+            className={`flex-1 py-2 rounded-lg font-bold text-sm md:text-base transition-all duration-300 ${
+              view === "group" 
+                ? "bg-white text-violet-700 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Group Wishlist
+          </button>
+          
+        </div>
       </div>
 
       <div className="addtodo">
@@ -220,7 +242,7 @@ function App() {
                   {/* --- NEW: Show creator name if we are in the group view --- */}
                   {view === "group" && (
                     <div className="text-xs text-gray-500 font-semibold mt-1">
-                      Added by: {item.creatorName === username ? "You" : item.creatorName}
+                      {item.creatorName === username ? "You" : item.creatorName}
                     </div>
                   )}
                 </div>
