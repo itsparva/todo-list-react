@@ -143,38 +143,44 @@ function App() {
               <div
                 className={
                   item.isCompleted
-                    ? "text flex justify-between bg-green-100 p-2 m-2 rounded-lg"
-                    : "text flex justify-between bg-violet-100 p-2 m-2 rounded-lg"
+                    ? "flex items-center justify-between bg-green-100 p-2 md:p-3 m-2 rounded-lg"
+                    : "flex items-center justify-between bg-violet-100 p-2 md:p-3 m-2 rounded-lg"
                 }
               >
-                {/* Conditionally strike-through the text if completed */}
-                <div className={item.isCompleted ? "line-through" : ""}>
+                {/* Slightly reduced text size on mobile for better balance */}
+                <div
+                  className={`flex-1 min-w-0 break-words pr-2 md:pr-4 text-sm md:text-base ${
+                    item.isCompleted ? "line-through" : ""
+                  }`}
+                >
                   {item.todo}
                 </div>
 
-                <div className="buttons">
+                <div className="buttons flex gap-1 md:gap-2 shrink-0">
+                  
+                  {/* Changed from padding to fixed width/height: w-7 h-7 for mobile, w-9 h-9 for desktop */}
                   <button
                     onClick={() => handleDelete(item.id)}
-                    className="delete bg-violet-700 cursor-pointer hover:bg-violet-900 p-2 py-1 text-sm font-bold text-white rounded-md mx-2"
+                    className="delete bg-violet-700 cursor-pointer hover:bg-violet-900 w-7 h-7 md:w-9 md:h-9 flex items-center justify-center text-white rounded"
                   >
-                    <span className="material-symbols-outlined">delete</span>
+                    {/* Shrunk the icon explicitly to 16px on mobile */}
+                    <span className="material-symbols-outlined text-[16px] md:text-[20px]">delete</span>
                   </button>
 
                   <button
                     onClick={() => handleEdit(item.id)}
-                    className="edit bg-violet-700 cursor-pointer hover:bg-violet-900 p-2 py-1 text-sm font-bold text-white rounded-md mx-2"
+                    className="edit bg-violet-700 cursor-pointer hover:bg-violet-900 w-7 h-7 md:w-9 md:h-9 flex items-center justify-center text-white rounded"
                   >
-                    <span className="material-symbols-outlined">edit</span>
+                    <span className="material-symbols-outlined text-[16px] md:text-[20px]">edit</span>
                   </button>
 
                   <button
                     onClick={() => handleCheck(item.id)}
-                    className="check bg-violet-700 cursor-pointer hover:bg-violet-900 p-2 py-1 text-sm font-bold text-white rounded-md mx-2"
+                    className="check bg-violet-700 cursor-pointer hover:bg-violet-900 w-7 h-7 md:w-9 md:h-9 flex items-center justify-center text-white rounded"
                   >
-                    <span className="material-symbols-outlined">
-                      check_circle
-                    </span>
+                    <span className="material-symbols-outlined text-[16px] md:text-[20px]">check_circle</span>
                   </button>
+
                 </div>
               </div>
             </div>
