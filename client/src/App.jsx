@@ -1,21 +1,43 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import Navbar from "./components/navbar.jsx";
+import Auth from "./components/Auth.jsx"; // <-- 1. Import your new Auth component
 import { v4 as uuidv4 } from "uuid";
 const API = import.meta.env.VITE_API_URL;
 
 function App() {
-  // 1. Cleaned up state: Start with an empty array. MongoDB will fill it.
+  // 2. Auth State: Check local storage first so users stay logged in on refresh
+  const [token, setToken] = useState(localStorage.getItem("token") || "");
+  const [username, setUsername] = useState(localStorage.getItem("username") || "");
+
   const [todos, setTodos] = useState([]);
   const [todo, setTodo] = useState("");
   const [editId, setEditId] = useState(null);
 
+  // --- LOGOUT FUNCTION ---
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    setToken("");
+    setUsername("");
+    setTodos([]); // Clear the tasks from the screen for privacy
+  };
+
   useEffect(() => {
-    // 2. Fetch data from your backend (Fixed from /users to /todos)
-    fetch(`${API}/todos`)
-      .then((res) => res.json())
+    // Only fetch tasks if the user is actually logged in
+    if (!token) return;
+
+    // 3. Attach the VIP Wristband to the GET request
+    fetch(`${API}/todos`, {
+      headers: {
+        Authorization: `Bearer ${token}` 
+      }
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Not authorized");
+        return res.json();
+      })
       .then((data) => {
-        // Map the MongoDB '_id' to your 'id' state so the rest of your app works
         const formattedData = data.map((item) => ({
           id: item._id,
           todo: item.todo,
@@ -23,40 +45,45 @@ function App() {
         }));
         setTodos(formattedData);
       })
-      .catch((err) => console.error("Failed to fetch tasks:", err));
-  }, []);
+      .catch((err) => {
+        console.error("Failed to fetch tasks:", err);
+        // If the token is fake or expired, force a logout
+        handleLogout(); 
+      });
+  }, [token]);
 
   const handleAdd = async () => {
     if (todo.trim().length === 0) return;
 
     if (editId) {
       // --- UPDATE EXISTING TASK ---
-      
-      // 1. Tell database to update the text
       await fetch(`${API}/todos/${editId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ todo: todo }), // Send the new text
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // <-- Wristband
+        },
+        body: JSON.stringify({ todo: todo }),
       });
 
-      // 2. Update the React UI
       setTodos(
         todos.map((item) =>
           item.id === editId ? { ...item, todo: todo } : item
         )
       );
       
-      // 3. Clear edit mode
       setEditId(null);
       setTodo("");
       
     } else {
       // --- ADD NEW TASK ---
-      
       const response = await fetch(`${API}/todos`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ todo: todo })
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // <-- Wristband
+        },
+        body: JSON.stringify({ todo: todo, listType: "personal" }) // Default to personal for now
       });
       const newSavedTodo = await response.json();
 
@@ -71,38 +98,44 @@ function App() {
 
   const handleEdit = (id) => {
     const itemToEdit = todos.find((item) => item.id === id);
-    setTodo(itemToEdit.todo); // Put the text in the input box
-    setEditId(id); // Remember which task we are currently editing
+    setTodo(itemToEdit.todo);
+    setEditId(id);
   };
 
   const handleDelete = async (id) => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this task?",
-    );
+    const confirmDelete = window.confirm("Are you sure you want to delete this task?");
     if (confirmDelete) {
-      // 1. Tell the database to delete it
-      await fetch(`${API}/todos/${id}`, {
+      const response = await fetch(`${API}/todos/${id}`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}` // <-- Wristband
+        }
       });
 
-      // 2. Remove it from the React UI
+      // If the backend bouncer rejects the delete (e.g. they didn't create it)
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(errorData.message);
+        return;
+      }
+
       const newTodos = todos.filter((item) => item.id !== id);
       setTodos(newTodos);
     }
   };
 
   const handleCheck = async (id) => {
-    // 1. Find the item we are clicking so we know its current state
     const itemToToggle = todos.find((item) => item.id === id);
 
-    // 2. Tell the database to flip the boolean
     await fetch(`${API}/todos/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}` // <-- Wristband
+      },
       body: JSON.stringify({ isCompleted: !itemToToggle.isCompleted }),
     });
 
-    // 3. Update the React UI
     setTodos(
       todos.map((item) =>
         item.id === id ? { ...item, isCompleted: !item.isCompleted } : item,
@@ -110,14 +143,31 @@ function App() {
     );
   };
 
+  // 4. THE GATEKEEPER: If no token exists, ONLY render the Auth screen!
+  if (!token) {
+    return <Auth setToken={setToken} setUsername={setUsername} />;
+  }
+
+  // 5. THE MAIN APP: Only renders if they are logged in
   return (
     <>
       <Navbar />
-      <div className="heading bg-blue-200 flex p-2 text-gray-600 justify-center">
-        <h1 className="text-2xl font-bold">To Do list</h1>
+      
+      {/* Updated Heading to show Username and Logout button */}
+      <div className="heading bg-blue-200 flex p-2 text-gray-600 justify-between items-center px-4 md:px-10">
+        <h1 className="text-xl md:text-2xl font-bold">To Do list</h1>
+        <div className="flex items-center gap-4">
+          <span className="font-semibold text-violet-800 hidden md:inline">Hi, {username}!</span>
+          <button 
+            onClick={handleLogout}
+            className="bg-violet-500 hover:bg-violet-700 text-white font-bold py-1 px-3 rounded text-sm transition"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
-      <div className="addtodo">
+      <div className="addtodo mt-4">
         <div className="text-lg font-semibold bg-violet-100 p-2 px-4">
           Add your Task
         </div>
@@ -147,7 +197,6 @@ function App() {
                     : "flex items-center justify-between bg-violet-100 p-2 md:p-3 m-2 rounded-lg"
                 }
               >
-                {/* Slightly reduced text size on mobile for better balance */}
                 <div
                   className={`flex-1 min-w-0 break-words pr-2 md:pr-4 text-sm md:text-base ${
                     item.isCompleted ? "line-through" : ""
@@ -157,13 +206,10 @@ function App() {
                 </div>
 
                 <div className="buttons flex gap-1 md:gap-2 shrink-0">
-                  
-                  {/* Changed from padding to fixed width/height: w-7 h-7 for mobile, w-9 h-9 for desktop */}
                   <button
                     onClick={() => handleDelete(item.id)}
                     className="delete bg-violet-700 cursor-pointer hover:bg-violet-900 w-7 h-7 md:w-9 md:h-9 flex items-center justify-center text-white rounded"
                   >
-                    {/* Shrunk the icon explicitly to 16px on mobile */}
                     <span className="material-symbols-outlined text-[16px] md:text-[20px]">delete</span>
                   </button>
 
@@ -180,7 +226,6 @@ function App() {
                   >
                     <span className="material-symbols-outlined text-[16px] md:text-[20px]">check_circle</span>
                   </button>
-
                 </div>
               </div>
             </div>
