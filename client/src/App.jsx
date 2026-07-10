@@ -1,53 +1,52 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import Navbar from "./components/navbar.jsx";
-import Auth from "./components/Auth.jsx"; // <-- 1. Import your new Auth component
+import Auth from "./components/Auth.jsx";
 import { v4 as uuidv4 } from "uuid";
 const API = import.meta.env.VITE_API_URL;
 
 function App() {
-  // 2. Auth State: Check local storage first so users stay logged in on refresh
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [username, setUsername] = useState(localStorage.getItem("username") || "");
+
+  // --- NEW: The Toggle State ---
+  const [view, setView] = useState("personal"); // Defaults to personal
 
   const [todos, setTodos] = useState([]);
   const [todo, setTodo] = useState("");
   const [editId, setEditId] = useState(null);
 
-  // --- LOGOUT FUNCTION ---
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
     setToken("");
     setUsername("");
-    setTodos([]); // Clear the tasks from the screen for privacy
+    setTodos([]); 
   };
 
   useEffect(() => {
-    // Only fetch tasks if the user is actually logged in
     if (!token) return;
 
-    // 3. Attach the VIP Wristband to the GET request
     fetch(`${API}/todos`, {
-      headers: {
-        Authorization: `Bearer ${token}` 
-      }
+      headers: { Authorization: `Bearer ${token}` }
     })
       .then((res) => {
         if (!res.ok) throw new Error("Not authorized");
         return res.json();
       })
       .then((data) => {
+        // --- NEW: Grab the creatorName and listType from the database ---
         const formattedData = data.map((item) => ({
           id: item._id,
           todo: item.todo,
           isCompleted: item.isCompleted,
+          creatorName: item.creatorName, 
+          listType: item.listType,       
         }));
         setTodos(formattedData);
       })
       .catch((err) => {
         console.error("Failed to fetch tasks:", err);
-        // If the token is fake or expired, force a logout
         handleLogout(); 
       });
   }, [token]);
@@ -56,12 +55,11 @@ function App() {
     if (todo.trim().length === 0) return;
 
     if (editId) {
-      // --- UPDATE EXISTING TASK ---
       await fetch(`${API}/todos/${editId}`, {
         method: "PUT",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // <-- Wristband
+          "Authorization": `Bearer ${token}` 
         },
         body: JSON.stringify({ todo: todo }),
       });
@@ -76,21 +74,23 @@ function App() {
       setTodo("");
       
     } else {
-      // --- ADD NEW TASK ---
       const response = await fetch(`${API}/todos`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // <-- Wristband
+          "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ todo: todo, listType: "personal" }) // Default to personal for now
+        // --- NEW: Send the current 'view' as the listType ---
+        body: JSON.stringify({ todo: todo, listType: view }) 
       });
       const newSavedTodo = await response.json();
 
       setTodos([...todos, { 
         id: newSavedTodo._id, 
         todo: newSavedTodo.todo, 
-        isCompleted: newSavedTodo.isCompleted 
+        isCompleted: newSavedTodo.isCompleted,
+        creatorName: newSavedTodo.creatorName,
+        listType: newSavedTodo.listType
       }]);
       setTodo("");
     }
@@ -107,12 +107,9 @@ function App() {
     if (confirmDelete) {
       const response = await fetch(`${API}/todos/${id}`, {
         method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}` // <-- Wristband
-        }
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
-      // If the backend bouncer rejects the delete (e.g. they didn't create it)
       if (!response.ok) {
         const errorData = await response.json();
         alert(errorData.message);
@@ -131,7 +128,7 @@ function App() {
       method: "PUT",
       headers: { 
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}` // <-- Wristband
+        "Authorization": `Bearer ${token}` 
       },
       body: JSON.stringify({ isCompleted: !itemToToggle.isCompleted }),
     });
@@ -143,17 +140,17 @@ function App() {
     );
   };
 
-  // 4. THE GATEKEEPER: If no token exists, ONLY render the Auth screen!
   if (!token) {
     return <Auth setToken={setToken} setUsername={setUsername} />;
   }
 
-  // 5. THE MAIN APP: Only renders if they are logged in
+  // --- NEW: The Filter (Only show tasks that match the current toggle view) ---
+  const displayTodos = todos.filter((item) => item.listType === view);
+
   return (
     <>
       <Navbar />
       
-      {/* Updated Heading to show Username and Logout button */}
       <div className="heading bg-blue-200 flex p-2 text-gray-600 justify-between items-center px-4 md:px-10">
         <h1 className="text-xl md:text-2xl font-bold">To Do list</h1>
         <div className="flex items-center gap-4">
@@ -167,9 +164,25 @@ function App() {
         </div>
       </div>
 
-      <div className="addtodo mt-4">
+      {/* --- NEW: The Toggle Buttons --- */}
+      <div className="flex justify-center gap-4 my-6">
+        <button 
+          onClick={() => setView("personal")}
+          className={`px-6 py-2 rounded-lg font-bold transition ${view === "personal" ? "bg-violet-600 text-white shadow-md" : "bg-gray-200 text-gray-600 hover:bg-gray-300"}`}
+        >
+          Personal
+        </button>
+        <button 
+          onClick={() => setView("group")}
+          className={`px-6 py-2 rounded-lg font-bold transition ${view === "group" ? "bg-violet-600 text-white shadow-md" : "bg-gray-200 text-gray-600 hover:bg-gray-300"}`}
+        >
+          Group Wishlist
+        </button>
+      </div>
+
+      <div className="addtodo">
         <div className="text-lg font-semibold bg-violet-100 p-2 px-4">
-          Add your Task
+          Add to {view === "personal" ? "Personal List" : "Group Wishlist"}
         </div>
         <input
           onChange={(e) => setTodo(e.target.value)}
@@ -187,7 +200,10 @@ function App() {
       </div>
 
       <div className="todos">
-        {todos.map((item) => {
+        {displayTodos.length === 0 && (
+          <div className="text-center text-gray-500 mt-6">Nothing here yet!</div>
+        )}
+        {displayTodos.map((item) => {
           return (
             <div key={item.id} className="todo">
               <div
@@ -197,28 +213,37 @@ function App() {
                     : "flex items-center justify-between bg-violet-100 p-2 md:p-3 m-2 rounded-lg"
                 }
               >
-                <div
-                  className={`flex-1 min-w-0 break-words pr-2 md:pr-4 text-sm md:text-base ${
-                    item.isCompleted ? "line-through" : ""
-                  }`}
-                >
-                  {item.todo}
+                <div className={`flex-1 min-w-0 break-words pr-2 md:pr-4`}>
+                  <div className={`text-sm md:text-base ${item.isCompleted ? "line-through" : ""}`}>
+                    {item.todo}
+                  </div>
+                  {/* --- NEW: Show creator name if we are in the group view --- */}
+                  {view === "group" && (
+                    <div className="text-xs text-gray-500 font-semibold mt-1">
+                      Added by: {item.creatorName === username ? "You" : item.creatorName}
+                    </div>
+                  )}
                 </div>
 
                 <div className="buttons flex gap-1 md:gap-2 shrink-0">
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="delete bg-violet-700 cursor-pointer hover:bg-violet-900 w-7 h-7 md:w-9 md:h-9 flex items-center justify-center text-white rounded"
-                  >
-                    <span className="material-symbols-outlined text-[16px] md:text-[20px]">delete</span>
-                  </button>
+                  {/* --- NEW: Only show Edit and Delete buttons if you are the creator! --- */}
+                  {item.creatorName === username && (
+                    <>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="delete bg-violet-700 cursor-pointer hover:bg-violet-900 w-7 h-7 md:w-9 md:h-9 flex items-center justify-center text-white rounded"
+                      >
+                        <span className="material-symbols-outlined text-[16px] md:text-[20px]">delete</span>
+                      </button>
 
-                  <button
-                    onClick={() => handleEdit(item.id)}
-                    className="edit bg-violet-700 cursor-pointer hover:bg-violet-900 w-7 h-7 md:w-9 md:h-9 flex items-center justify-center text-white rounded"
-                  >
-                    <span className="material-symbols-outlined text-[16px] md:text-[20px]">edit</span>
-                  </button>
+                      <button
+                        onClick={() => handleEdit(item.id)}
+                        className="edit bg-violet-700 cursor-pointer hover:bg-violet-900 w-7 h-7 md:w-9 md:h-9 flex items-center justify-center text-white rounded"
+                      >
+                        <span className="material-symbols-outlined text-[16px] md:text-[20px]">edit</span>
+                      </button>
+                    </>
+                  )}
 
                   <button
                     onClick={() => handleCheck(item.id)}
