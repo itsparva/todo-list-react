@@ -4,6 +4,8 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 const app = express();
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 // Middleware
 app.use(express.json()); // Allows us to read JSON data
@@ -40,6 +42,75 @@ const Todo = mongoose.model("Todo", todoSchema);
 
 // --- 3. Create your API Routes ---
 
+// ==========================================
+//           AUTHENTICATION ROUTES
+// ==========================================
+
+// POST: Sign Up a new user
+app.post("/signup", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // 1. Check if the user already exists
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    // 2. Scramble (Hash) the password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // 3. Create the new user and save to database
+    const newUser = new User({
+      username: username,
+      password: hashedPassword,
+      groupId: "group-01" // Default group for everyone for now
+    });
+    await newUser.save();
+
+    res.status(201).json({ message: "User created successfully!" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error during signup" });
+  }
+});
+
+
+// POST: Log In an existing user
+app.post("/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // 1. Find the user in the database
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid username or password" });
+    }
+
+    // 2. Compare the typed password with the scrambled one in the database
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid username or password" });
+    }
+
+    // 3. Create the VIP Wristband (JWT)
+    const token = jwt.sign(
+      { userId: user._id, username: user.username, groupId: user.groupId },
+      process.env.JWT_SECRET,
+      { expiresIn: "36h" } // The user stays logged in for 36 hours
+    );
+
+    // 4. Send the wristband and user info back to the React app
+    res.json({
+      token: token,
+      user: { username: user.username, groupId: user.groupId }
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error during login" });
+  }
+});
+
+// ==========================================
 // GET: Fetch all todos
 app.get("/todos", async (req, res) => {
   const todos = await Todo.find();
